@@ -1,0 +1,7 @@
+Name,Email,IssueType,Priority,Description,Timestamp
+John Doe,john@gmail.com,wifi,High,Unable to connect wifi,2026-03-12 09:00
+Sarah Smith,sarah@gmail,login,Medium,Password reset required,2026-03-12 10:30
+Mike Lee,mike@gmail.com,software,Low,MS Word not opening,2026-03-12 11:10
+Anna Roy,anna@gmail.com,hardware,High,Laptop overheating,2026-03-12 12:20
+John Doe,john@gmail.com,wifi,High,Wifi still not working,2026-03-12 09:30
+Chris Paul,chris@gmail.com,network,Medium,LAN cable issue,2026-03-12 14:00
