@@ -1,0 +1,609 @@
+{
+  "name": "Internal IT Support Ticket Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        -16
+      ],
+      "id": "46251eb2-7494-4402-b3a7-3ddc5e3afc19",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "fileSelector": "C:/Users/Karthikeyan/.n8n-files/tickets.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -288,
+        -16
+      ],
+      "id": "dc43cf02-5814-4694-9262-57500d75d2ae",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "jsCode": "const validTypes = [\"wifi\",\"login\",\"software\",\"hardware\"];\n\nfor (const item of $input.all()) {\n\n  let issue = item.json.IssueType?.toString().toLowerCase().trim();\n\n  if(!validTypes.includes(issue)){\n    issue = \"other\";\n  }\n\n  item.json.IssueType = issue;\n\n  item.json.Priority = item.json.Priority?.toString().toLowerCase().trim() || \"low\";\n  item.json.Email = item.json.Email?.toString().toLowerCase().trim() || \"\";\n\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -16
+      ],
+      "id": "854ae1eb-9bba-49f2-9d29-460f81712a1c",
+      "name": "Normalize Fields"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -80,
+        -16
+      ],
+      "id": "2d5fc4f1-f572-4597-b8aa-f18e9a48eb91",
+      "name": "Read CSV"
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  item.json.ticket_id =\n    \"TICK-\" + Date.now() + \"-\" + Math.floor(Math.random()*1000);\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -16
+      ],
+      "id": "ae6a915b-6987-4842-a5b7-6c9b2ff395ca",
+      "name": "Generate Ticket ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().sort(\n (a,b)=> new Date(a.json.Timestamp) - new Date(b.json.Timestamp)\n);\n\nconst seen = new Map();\n\nreturn items.filter(item => {\n\n  const key = `${item.json.Email}_${item.json.IssueType}`;\n  const timestamp = new Date(item.json.Timestamp);\n\n  if(seen.has(key)){\n    const previous = seen.get(key);\n    const diff = (timestamp - previous) / (1000*60*60);\n\n    if(diff <= 24){\n      return false;\n    }\n  }\n\n  seen.set(key,timestamp);\n  return true;\n\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        -16
+      ],
+      "id": "e6e14c05-479a-4391-94cc-d6b98f3e0775",
+      "name": "Deduplicate Tickets"
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n\nlet hours = 0;\n\nconst priority = item.json.Priority.toLowerCase();\n\nif (priority === \"high\") hours = 4;\nif (priority === \"medium\") hours = 24;\nif (priority === \"low\") hours = 72;\n\nconst timestamp = new Date(item.json.Timestamp);\n\n// add SLA hours\ntimestamp.setHours(timestamp.getHours() + hours);\n\nitem.json.sla_deadline = timestamp.toLocaleString();\n\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -16
+      ],
+      "id": "e73552b4-a73e-4d58-a4a9-4801fa877d13",
+      "name": "SLA Calculation"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\Users\\Karthikeyan\\.n8n-files\\processed_tickets.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        -16
+      ],
+      "id": "08e4e621-8411-4528-8696-d041dab09cb0",
+      "name": "Store Processed Tickets",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfor (const item of items){\n\n if(!item.json.Email.match(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/)){\n   item.json.reason=\"Invalid Email\";\n }\n\n else if(![\"high\",\"medium\",\"low\"].includes(item.json.Priority)){\n   item.json.reason=\"Invalid Priority\";\n }\n\n else{\n   item.json.reason=\"Unknown Issue Type\";\n }\n\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        160
+      ],
+      "id": "6b3c37d5-87bc-497b-8f63-dfef8f193f3a",
+      "name": "Rejected Tickets"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "88f1ff51-262a-429a-8337-d6c6a58833a9",
+              "leftValue": "={{ $json.Email }}",
+              "rightValue": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        544,
+        -16
+      ],
+      "id": "0920abce-ffaa-4f66-bbb8-03cc1786b4ac",
+      "name": "Email Validation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "580c8dfd-dadc-4bf2-a167-21b8ea3eaad4",
+              "leftValue": "={{ $json.Priority }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "fb728740-cd4f-434d-8f7b-1ab7625d9b25",
+              "leftValue": "={{ $json.Priority }}",
+              "rightValue": "medium",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "332eb47e-dfa1-467e-9233-faef871188f5",
+              "leftValue": "={{ $json.Priority }}",
+              "rightValue": "low",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        752,
+        -16
+      ],
+      "id": "b0f67b50-9b02-4b29-9d39-06e158da7f1e",
+      "name": "Priority Validation"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        160
+      ],
+      "id": "6896e319-b5e3-4af3-89bf-e9fe6b58d098",
+      "name": "Convert to File1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const processedItems = $input.all();\n\nconst processed = processedItems.length;\nconst total = processedItems.length > 0 ? processedItems[0].json.total_received : 0;\nconst rejected = total - processed; // simple math — no lookup needed\n\nconst teamCounts = {\n  Network:0,\n  \"IT Support\":0,\n  Applications:0,\n  Infrastructure:0,\n  General:0\n};\n\nfor (const item of processedItems) {\n  const team = item.json.team;\n\n  if(teamCounts[team] !== undefined){\n    teamCounts[team]++;\n  }\n}\n\nconst output = [];\n\noutput.push({ json:{ metric:\"total_received\", value: total } });\noutput.push({ json:{ metric:\"processed\", value: processed } });\noutput.push({ json:{ metric:\"rejected\", value: rejected } });\n\nfor(const team in teamCounts){\n  output.push({\n    json:{\n      metric: team,\n      value: teamCounts[team]\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        160
+      ],
+      "id": "754715c8-af33-44ba-bcee-c93b8fb8249c",
+      "name": "Summary Report"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        160
+      ],
+      "id": "bdddd8ba-f942-4fd9-9f5e-0667ce27c29a",
+      "name": "Convert to File2"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\Users\\Karthikeyan\\.n8n-files\\summary_report.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2192,
+        160
+      ],
+      "id": "128d5ab2-4273-44c2-b3d0-41dfb6ab56b5",
+      "name": "summary report Tickets save",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\Users\\Karthikeyan\\.n8n-files\\rejected_tickets.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        160
+      ],
+      "id": "55cfa950-4e59-4f8d-8701-659c684ce65b",
+      "name": "rejected files save",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    error_type: \"storage_failure\",\n    message: item.json.error?.message || \"File write failed\",\n    node: \"Store Processed Tickets\"\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        0
+      ],
+      "id": "5db9db7a-a5c2-4f53-9fa9-86b6fa39d848",
+      "name": "Storage Error Logger"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2416,
+        0
+      ],
+      "id": "3206b829-4800-4579-8f59-4d6c526ccb5d",
+      "name": "Convert to File3"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "C:\\Users\\Karthikeyan\\.n8n-files\\storage_errors.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2624,
+        0
+      ],
+      "id": "407627a2-8d9e-40d4-a09b-e6347b1cb4c6",
+      "name": "storage_errors save"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        -16
+      ],
+      "id": "888da061-6eb5-4f09-beaf-722e49f746b7",
+      "name": "Convert to File",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n\n  const issue = item.json.IssueType;\n\n  if(issue === \"wifi\"){\n    item.json.team = \"Network\";\n  }\n  else if(issue === \"login\"){\n    item.json.team = \"IT Support\";\n  }\n  else if(issue === \"software\"){\n    item.json.team = \"Applications\";\n  }\n  else if(issue === \"hardware\"){\n    item.json.team = \"Infrastructure\";\n  }\n  else{\n    item.json.team = \"General\";\n  }\n\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -16
+      ],
+      "id": "ef24a771-2303-4f24-b210-9a9deadb2dce",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst total = items.length;\n\nfor (const item of items) {\n  item.json.total_received = total;\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        -16
+      ],
+      "id": "21404d0f-22ca-4fe8-9bcd-8b06f8d1f19c",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Read CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Fields": {
+      "main": [
+        [
+          {
+            "node": "Email Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Ticket ID": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Tickets": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLA Calculation": {
+      "main": [
+        [
+          {
+            "node": "Summary Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Validation": {
+      "main": [
+        [
+          {
+            "node": "Priority Validation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Validation": {
+      "main": [
+        [
+          {
+            "node": "Generate Ticket ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rejected Tickets": {
+      "main": [
+        [
+          {
+            "node": "Convert to File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File1": {
+      "main": [
+        [
+          {
+            "node": "rejected files save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Processed Tickets": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Storage Error Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Report": {
+      "main": [
+        [
+          {
+            "node": "Convert to File2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File2": {
+      "main": [
+        [
+          {
+            "node": "summary report Tickets save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rejected files save": {
+      "main": [
+        []
+      ]
+    },
+    "Storage Error Logger": {
+      "main": [
+        [
+          {
+            "node": "Convert to File3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File3": {
+      "main": [
+        [
+          {
+            "node": "storage_errors save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Store Processed Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "SLA Calculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Normalize Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ba0d225d-0db0-4c31-a582-daf573d2e2eb",
+  "meta": {
+    "instanceId": "f3325c22a97d1d7878f849f3ba613a53617dedd6e5ed0a48ada51105470ba471"
+  },
+  "id": "8fMF6lzL7bFsOrzV",
+  "tags": []
+}
